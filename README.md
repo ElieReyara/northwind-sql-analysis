@@ -114,7 +114,11 @@ Enfaite, il peut arriver qu'une entrepise soir plus rapide sur un pays qu'un aut
   WHERE o.shipped_date IS NOT NULL
   GROUP BY sh.company_name, o.ship_country
   ORDER BY delai_moyen_livraison DESC 
-  
+- **Requête 5/10 — Taux de réapprovisionnement critique.**
+Question business : Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle continue ?**
+Le stock actuel : Tu l'as dans la table products (colonne units_in_stock).
+La vitesse de vente (Vélocité) : C'est le nombre d'unités vendues par jour. Si tu constates que tu as vendu 300 unités d'un produit sur les 30 derniers jours, cela signifie que ta vélocité est de $300 / 30 = 10 unités/jour.
+La projection : Si tu vends 10 unités par jour et qu'il te reste 50 unités en stock, tu as du stock pour $50 / 10 = 5 \text{ jours}$. Tu seras donc en rupture bien avant les 30 prochains jours.
   
 
   
