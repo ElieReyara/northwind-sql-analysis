@@ -19,8 +19,29 @@ L'objectif de ce projet est de transformer les données brutes (transactions, st
   Cela nous donnera :
     SELECT SUM((unit_price * quantity)*(1-discount)) AS ca_net
     FROM order_details
+  (Claude)
+  -- ======================================
+  -- REQUÊTE 1 : CA net par catégorie
+  -- Business context : identifier les catégories
+  -- qui génèrent le plus de valeur réelle
+  -- (après remises) vs volume brut
+  -- ======================================
+  
+  SELECT
+      c.category_name,
+      COUNT(DISTINCT od.order_id) AS nb_commandes,
+      SUM(od.quantity)            AS quantite_totale,
+      SUM((od.quantity * od.unit_price) * (1 - od.discount)) AS ca_net_par_categorie
+  FROM categories c
+  INNER JOIN products p  ON p.category_id = c.category_id
+  INNER JOIN order_details od ON od.product_id = p.product_id
+  GROUP BY c.category_name
+  ORDER BY ca_net_par_categorie DESC;
+
+  Meat/Poultry a un panier moyen élevé avec peu de volume — ça signifie des produits premium, achetés moins souvent mais à haute valeur unitaire. En business, ça change complètement la stratégie commerciale vs une catégorie haute fréquence / faible valeur.(a rajouter correctement)
 - **Requête 2/10 — Le Top 10 des clients par Chiffre d'Affaires Net**
   Toujours dans l'optique d'analyser la santé financière de l'entreprise, nous voulons connaitre cette fois si le top 10 de ces meilleurs clients. Il vaut mieux concentrer nos efforts sur la satisfaction de ceux qui font le plus de notre CA.
+  Claude me pousse beaucoup plus loin en allant me denmander comment on identie vraiment une campagnie de maniere unique, aller chercher ds metris pertinente plutot que de se limiter a celle qu'on a la.
     SELECT  c.company_name, SUM((od.quantity * od.unit_price)*(1-od.discount)) as ca_net_par_company 
     FROM customers c 
     INNER JOIN orders o
@@ -39,14 +60,61 @@ L'objectif de ce projet est de transformer les données brutes (transactions, st
     ON od.product_id = p.product_id
     GROUP BY c.category_name
     ORDER BY ca_net_par_category DESC
+    ou encoe
+    SELECT  
+    	cu.customer_id,
+    	cu.company_name,
+    	COUNT(o.order_id) as nb_commandes,
+    	SUM((od.quantity * od.unit_price)*(1-od.discount)) as ca_net_par_company, 
+    	SUM((od.quantity * od.unit_price) * (1 - od.discount)) 
+    	/ COUNT(DISTINCT o.order_id) AS panier_moyen
+    FROM customers cu 
+    INNER JOIN orders o
+    ON cu.customer_id = o.customer_id
+    INNER JOIN order_details od
+    ON od.order_id = o.order_id
+    GROUP BY cu.customer_id, cu.company_name
+    ORDER BY ca_net_par_company DESC
+    LIMIT 10
 - **Requête 3/10 : L'analyse des produits fantômes.**
   Le Responsable Logistique a une intuition : il pense que le catalogue est surchargé de produits qui coûtent cher en stockage mais que personne n'achète. Il veut la liste des produits qui n'ont jamais été commandés.
-    SELECT p.product_name, od.order_id, od.product_id 
+    SELECT 
+    	p.product_name, 
+    	p.unit_price, 
+    	p.units_in_stock, 
+    	p.discontinued
     FROM products p
     LEFT JOIN order_details od
     ON p.product_id = od.product_id
     WHERE od.product_id IS NULL
   ps : Tout les produit ont ete vendus, donc l'intuition de notre responsable logistic etait donc fausse. Imaginons que la table products contienne des produits archivés ou discontinus (des produits qu'on ne vend plus). S'ils ont été vendus il y a 3 ans, ils   apparaissent dans ta jointure, donc pas de NULL. Pourtant, ils encombrent peut-être encore l'entrepôt aujourd'hui.
+- **Requête 4/10 : L'analyse des délais de livraison.**
+  Le Directeur des Opérations veut auditer la Supply Chain. Il veut connaître le délai moyen en jours entre la date de commande et la date de livraison moyen, par compagnie mais aussi par pays de livraison. Cela nous permet d'apprecier les livreurs les plus rapides.
+Enfaite, il peut arriver qu'une entrepise soir plus rapide sur un pays qu'un autre meme si son concurrent est globalement plus rapide, ca nous sert aaffiner nos choix. Donc la plus pertinente pour la question businnes est la 1ere, mais la seconde est utile aussi.
+  --Par trasnporteur global
+  SELECT
+  	sh.company_name,
+  	COUNT(DISTINCT o.order_id) AS nb_commandes,
+  	ROUND(AVG( shipped_date::date - order_date::date)) as delai_moyen_livraison
+  FROM orders o
+  INNER JOIN shippers sh
+  ON sh.shipper_id = o.ship_via
+  WHERE o.shipped_date IS NOT NULL
+  GROUP BY sh.company_name
+  ORDER BY delai_moyen_livraison DESC 
+  
+  --Par pays
+  SELECT
+  	o.ship_country,
+  	sh.company_name,
+  	ROUND(AVG( shipped_date::date - order_date::date)) as delai_moyen_livraison
+  FROM orders o
+  INNER JOIN shippers sh
+  ON sh.shipper_id = o.ship_via
+  WHERE o.shipped_date IS NOT NULL
+  GROUP BY sh.company_name, o.ship_country
+  ORDER BY delai_moyen_livraison DESC 
+  
   
 
   
