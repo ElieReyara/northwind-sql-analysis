@@ -119,7 +119,46 @@ Question business : Quels produits risquent une rupture de stock dans les 30 pro
 Le stock actuel : Tu l'as dans la table products (colonne units_in_stock).
 La vitesse de vente (Vélocité) : C'est le nombre d'unités vendues par jour. Si tu constates que tu as vendu 300 unités d'un produit sur les 30 derniers jours, cela signifie que ta vélocité est de $300 / 30 = 10 unités/jour.
 La projection : Si tu vends 10 unités par jour et qu'il te reste 50 unités en stock, tu as du stock pour $50 / 10 = 5 \text{ jours}$. Tu seras donc en rupture bien avant les 30 prochains jours.
+- **Requête 5/10 :  — Taux de réapprovisionnement critique..**
+  Question business : "Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle continue ?"
+Le stock actuel : Tu l'as dans la table products (colonne units_in_stock).
+La vitesse de vente (Vélocité) : 
+C'est le nombre d'unités vendues par jour. Si tu constates que tu as vendu 300 unités d'un 
+produit sur les 30 derniers jours, cela signifie que ta vélocité est de $300 / 30 = 10 unités/jour$.
+La projection : Si tu vends 10 unités par jour et qu'il te reste 50 unités en stock, tu as du stock pour $50 / 10 = 5\jours$. 
+Tu seras donc en rupture bien avant les 30 prochains jours.'
+
+  -- CTE 1 : calculer les unités vendues 
+  --         par produit sur les 90 derniers jours
   
+  WITH ventes_recentes AS (
+     SELECT
+     	  p.product_id,
+  	  p.product_name,
+  	  (SUM(od.quantity)   /
+  	  90) as velocity_by_product
+    FROM order_details od 
+    INNER JOIN products p  
+    ON p.product_id = od.product_id
+    INNER JOIN orders o
+    ON o.order_id = od.order_id
+    WHERE o.order_date >= '1998-05-06'::date - INTERVAL '90 days'
+    GROUP BY p.product_id, p.product_name
+  )
+  --Nous pourrions aussi bien utiliser o.shipped_date car la la commande quitte effectivement le stcok, il faut documenter le choix.
+  
+  -- Requête principale : joindre avec products
+  -- et appliquer la condition de risque
+  
+  SELECT 
+  	p.product_name, 
+  	p.units_in_stock,
+  	vr.velocity_by_product,
+  	ROUND(p.units_in_stock / NULLIF(vr.velocity_by_product, 0)) AS jours_restants
+  FROM products p
+  LEFT JOIN ventes_recentes vr 
+  ON p.product_id = vr.product_id
+  WHERE p.units_in_stock < vr.velocity_by_product * 30
 
   
   
