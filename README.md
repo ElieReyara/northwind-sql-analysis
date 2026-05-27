@@ -2,9 +2,12 @@
 
 ## Contexte Business
 
-Northwind Traders est une entreprise internationale de distribution et d'import-export de produits alimentaires. Face à une concurrence accrue et à des marges de plus en plus serrées, la direction générale exige un audit complet de ses opérations globales.
+Northwind Traders est une entreprise internationale de distribution et d'import-export de produits
+alimentaires. Face à une concurrence accrue et à des marges de plus en plus serrées, la direction
+générale exige un audit complet de ses opérations globales.
 
-L'objectif de ce projet est de transformer les données brutes (transactions, stocks, clients, employés) en leviers stratégiques actionnables pour :
+L'objectif de ce projet est de transformer les données brutes (transactions, stocks, clients,
+employés) en leviers stratégiques actionnables pour :
 
 - **Optimiser la Supply Chain** : délais de livraison, gestion des ruptures de stock.
 - **Maximiser la Profitabilité** : analyse des remises, top produits, segmentation clients.
@@ -17,15 +20,37 @@ L'objectif de ce projet est de transformer les données brutes (transactions, st
 
 ---
 
+## Key Findings
+
+- **Beverages** est la catégorie n°1 avec **267 868 $ de CA net** sur 354 commandes — volume ET valeur au rendez-vous.
+- **Meat/Poultry** génère **163 022 $** avec seulement 161 commandes, soit le panier moyen le plus élevé du catalogue — profil premium à protéger.
+- **45 produits** sont en risque de rupture de stock dans les 30 prochains jours si la vélocité actuelle se maintient.
+- **QUICK-Stop** est le client le plus précieux avec **110 277 $ de CA net** sur 28 commandes (panier moyen : 3 938 $).
+- **Federal Shipping** est le transporteur le plus rapide avec un délai moyen de **7 jours**, contre 9 jours pour Speedy Express et United Package.
+- **Meat/Poultry** subit le taux de remise le plus élevé (**9%**) — paradoxe à investiguer : la catégorie la plus premium est aussi la plus discountée.
+- **Margaret Peacock** est la commerciale n°1 avec **232 891 $ de CA net** sur 156 commandes.
+- **Avril 1998** est le meilleur mois enregistré avec **123 799 $ de CA net** sur 74 commandes.
+- **2 clients** (Paris Spécialités, FISSA) n'ont passé aucune commande — à réactiver ou désactiver du CRM.
+
+---
+
 ## Analyse de la Rentabilité et de la Gestion des Stocks
 
-### Requête 1/10 — Chiffre d'Affaires Net Global & par Catégorie
+### Requête 1/10 — Chiffre d'Affaires Net par Catégorie
 
-**Question business :** Quelle est la santé financière réelle de l'entreprise, et quelles catégories de produits génèrent le plus de valeur après déduction des remises accordées aux clients ?
+**Question business :** Quelles catégories de produits génèrent le plus de valeur réelle après
+déduction des remises ? Comment distinguer les catégories à fort volume de celles à forte valeur
+unitaire ?
 
-**Pourquoi cette analyse ?** Présenter un CA brut à la direction, c'est mentir par omission. Les remises réduisent directement la valeur encaissée. La formule retenue est `(prix_unitaire × quantité) × (1 - remise)`, qui donne le montant réellement perçu par transaction. On compare ensuite le volume de commandes à la valeur générée pour distinguer les catégories à fort volume de celles à forte valeur unitaire.
+**Pourquoi cette analyse ?** Présenter un CA brut à la direction, c'est mentir par omission. Les
+remises réduisent directement la valeur encaissée. La formule retenue est
+`(prix_unitaire × quantité) × (1 - remise)`, qui donne le montant réellement perçu par transaction.
+On croise volume de commandes et valeur générée pour distinguer deux profils stratégiques opposés.
 
-**Insight clé :** La catégorie Meat/Poultry affiche un panier moyen élevé avec peu de commandes — signe de produits premium achetés en faible fréquence mais à haute valeur. Cela implique une stratégie commerciale différente d'une catégorie haute fréquence / faible valeur comme Beverages.
+**Insight :** Beverages domine avec 267 868 $ sur 354 commandes — forte fréquence ET forte valeur.
+Meat/Poultry, en revanche, génère 163 022 $ sur seulement 161 commandes : produits premium, achetés
+moins souvent mais à panier moyen nettement supérieur. Ces deux catégories nécessitent des stratégies
+commerciales radicalement différentes.
 
 ```sql
 -- ======================================
@@ -41,7 +66,7 @@ SELECT
     SUM(od.quantity)            AS quantite_totale,
     SUM((od.quantity * od.unit_price) * (1 - od.discount)) AS ca_net_par_categorie
 FROM categories c
-INNER JOIN products p  ON p.category_id = c.category_id
+INNER JOIN products      p  ON p.category_id = c.category_id
 INNER JOIN order_details od ON od.product_id = p.product_id
 GROUP BY c.category_name
 ORDER BY ca_net_par_categorie DESC;
@@ -51,9 +76,19 @@ ORDER BY ca_net_par_categorie DESC;
 
 ### Requête 2/10 — Top 10 des Clients par Chiffre d'Affaires Net
 
-**Question business :** Quels sont nos 10 clients les plus précieux, et comment se distinguent-ils en termes de fréquence d'achat et de valeur moyenne par commande ?
+**Question business :** Quels sont nos 10 clients les plus précieux, et comment se distinguent-ils
+en termes de fréquence d'achat et de valeur moyenne par commande ?
 
-**Pourquoi cette analyse ?** Un CA élevé peut masquer des réalités très différentes : un client peut générer beaucoup de revenus parce qu'il commande souvent (fidélité), ou parce qu'il passe de très grosses commandes ponctuelles (valeur unitaire élevée). Ces deux profils nécessitent des stratégies de fidélisation distinctes. Le client est identifié par son `customer_id` unique pour éviter toute ambiguïté sur les noms d'entreprises.
+**Pourquoi cette analyse ?** Un CA élevé peut masquer des réalités très différentes : un client peut
+générer beaucoup de revenus parce qu'il commande souvent (fidélité), ou parce qu'il passe de très
+grosses commandes ponctuelles (valeur unitaire élevée). Ces deux profils nécessitent des stratégies
+de fidélisation distinctes. Le client est identifié par son `customer_id` unique pour éviter toute
+ambiguïté sur les noms d'entreprises.
+
+**Insight :** QUICK-Stop mène avec 110 277 $ sur 28 commandes (panier moyen : 3 938 $). Ernst Handel
+suit avec 104 874 $ mais sur 30 commandes — plus fidèle, légèrement moins rentable par commande.
+Save-a-lot Markets se distingue avec le plus grand nombre de commandes (31) pour 104 361 $ de CA net :
+profil volume par excellence.
 
 ```sql
 -- ======================================
@@ -66,13 +101,13 @@ ORDER BY ca_net_par_categorie DESC;
 SELECT
     cu.customer_id,
     cu.company_name,
-    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
-    SUM((od.quantity * od.unit_price) * (1 - od.discount))                 AS ca_net_par_client,
+    COUNT(DISTINCT o.order_id)                                   AS nb_commandes,
+    SUM((od.quantity * od.unit_price) * (1 - od.discount))      AS ca_net_par_client,
     SUM((od.quantity * od.unit_price) * (1 - od.discount))
-        / COUNT(DISTINCT o.order_id)                                        AS panier_moyen
+        / COUNT(DISTINCT o.order_id)                             AS panier_moyen
 FROM customers cu
-INNER JOIN orders o       ON o.customer_id  = cu.customer_id
-INNER JOIN order_details od ON od.order_id  = o.order_id
+INNER JOIN orders        o  ON o.customer_id = cu.customer_id
+INNER JOIN order_details od ON od.order_id   = o.order_id
 GROUP BY cu.customer_id, cu.company_name
 ORDER BY ca_net_par_client DESC
 LIMIT 10;
@@ -82,11 +117,20 @@ LIMIT 10;
 
 ### Requête 3/10 — Analyse des Produits Fantômes
 
-**Question business :** Quels produits sont référencés au catalogue mais n'ont jamais généré une seule commande, représentant ainsi un coût de stockage sans retour sur investissement ?
+**Question business :** Quels produits sont référencés au catalogue mais n'ont jamais généré une
+seule commande, représentant ainsi un coût de stockage sans retour sur investissement ?
 
-**Pourquoi cette analyse ?** Le Responsable Logistique suspectait une surcharge du catalogue. On utilise un **anti-join** (LEFT JOIN + WHERE IS NULL) : on joint tous les produits avec les lignes de commandes, et on filtre ceux pour lesquels aucune correspondance n'existe dans `order_details`. On affiche également le statut `discontinued` pour distinguer les produits à archiver définitivement de ceux encore actifs mais jamais achetés — deux situations qui appellent deux décisions différentes.
+**Pourquoi cette analyse ?** Le Responsable Logistique suspectait une surcharge du catalogue. On
+utilise un **anti-join** (LEFT JOIN + WHERE IS NULL) : on joint tous les produits avec les lignes de
+commandes, et on filtre ceux pour lesquels aucune correspondance n'existe dans `order_details`. On
+affiche également le statut `discontinued` pour distinguer les produits à archiver définitivement de
+ceux encore actifs mais jamais achetés — deux situations qui appellent deux décisions différentes.
 
-**Résultat :** Tous les produits ont été commandés au moins une fois. L'intuition du Responsable Logistique était infondée sur ce dataset. À noter : des produits `discontinued` vendus par le passé n'apparaissent pas ici car ils ont bien des lignes dans `order_details`. Une analyse complémentaire sur le stock résiduel de ces produits discontinués serait pertinente.
+**Résultat :** Aucun produit fantôme détecté. Tous les articles du catalogue ont été commandés au
+moins une fois. L'intuition du Responsable Logistique était infondée sur ce dataset. À noter : des
+produits `discontinued` vendus par le passé n'apparaissent pas ici car ils ont bien des lignes dans
+`order_details`. Une analyse complémentaire sur le stock résiduel de ces produits discontinués
+serait pertinente.
 
 ```sql
 -- ======================================
@@ -109,9 +153,21 @@ WHERE od.product_id IS NULL;
 
 ### Requête 4/10 — Analyse des Délais de Livraison
 
-**Question business :** Quel transporteur offre les délais de livraison les plus fiables ? Existe-t-il des disparités par pays qui justifieraient d'adapter notre choix de transporteur selon la destination ?
+**Question business :** Quel transporteur offre les délais de livraison les plus fiables ? Existe-t-il
+des disparités par pays qui justifieraient d'adapter notre choix de transporteur selon la destination ?
 
-**Pourquoi cette analyse ?** Le délai de livraison est un levier direct de satisfaction client. On mesure l'écart en jours entre `order_date` et `shipped_date`. Les commandes non encore livrées (`shipped_date IS NULL`) sont exclues pour ne pas fausser la moyenne. Deux granularités sont analysées : la performance globale par transporteur (vision stratégique) et la performance par pays (vision opérationnelle). Un transporteur peut être globalement plus rapide mais moins performant sur certaines destinations spécifiques.
+**Pourquoi cette analyse ?** Le délai de livraison est un levier direct de satisfaction client. On
+mesure l'écart en jours entre `order_date` et `shipped_date`. Les commandes non encore livrées
+(`shipped_date IS NULL`) sont exclues pour ne pas fausser la moyenne. Deux granularités sont
+analysées : la performance globale par transporteur (vision stratégique) et la performance par pays
+(vision opérationnelle). Un transporteur globalement plus rapide peut être moins performant sur
+certaines destinations spécifiques.
+
+**Insight :** Federal Shipping est le plus rapide avec 7 jours en moyenne sur 249 commandes. Speedy
+Express et United Package affichent tous deux 9 jours de délai moyen — mais United Package traite
+315 commandes, soit le volume le plus important. Par pays, United Package atteint 14 jours en Suisse
+et Speedy Express 14 jours en Belgique : des anomalies qui justifient une renégociation contractuelle
+sur ces destinations.
 
 ```sql
 -- ======================================
@@ -122,8 +178,8 @@ WHERE od.product_id IS NULL;
 
 SELECT
     sh.company_name,
-    COUNT(DISTINCT o.order_id)                              AS nb_commandes,
-    ROUND(AVG(o.shipped_date::date - o.order_date::date))  AS delai_moyen_livraison
+    COUNT(DISTINCT o.order_id)                             AS nb_commandes,
+    ROUND(AVG(o.shipped_date::date - o.order_date::date)) AS delai_moyen_livraison
 FROM orders o
 INNER JOIN shippers sh ON sh.shipper_id = o.ship_via
 WHERE o.shipped_date IS NOT NULL
@@ -139,7 +195,7 @@ ORDER BY delai_moyen_livraison DESC;
 SELECT
     o.ship_country,
     sh.company_name,
-    ROUND(AVG(o.shipped_date::date - o.order_date::date))  AS delai_moyen_livraison
+    ROUND(AVG(o.shipped_date::date - o.order_date::date)) AS delai_moyen_livraison
 FROM orders o
 INNER JOIN shippers sh ON sh.shipper_id = o.ship_via
 WHERE o.shipped_date IS NOT NULL
@@ -151,11 +207,23 @@ ORDER BY delai_moyen_livraison DESC;
 
 ### Requête 5/10 — Taux de Réapprovisionnement Critique
 
-**Question business :** Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle se maintient ?
+**Question business :** Quels produits risquent une rupture de stock dans les 30 prochains jours si
+la vélocité de vente actuelle se maintient ?
 
-**Pourquoi cette analyse ?** On calcule une **vélocité de vente** : le nombre d'unités vendues par jour sur les 90 derniers jours. On compare ensuite ce rythme au stock disponible pour projeter dans combien de jours le stock sera épuisé. La condition de risque est `units_in_stock < velocite_journaliere × 30`. Une CTE est nécessaire car le calcul de vélocité (agrégation) doit être réalisé avant d'être comparé au stock dans la requête principale.
+**Pourquoi cette analyse ?** On calcule une **vélocité de vente** : le nombre d'unités vendues par
+jour sur les 90 derniers jours. On compare ce rythme au stock disponible pour projeter dans combien
+de jours le stock sera épuisé. La condition de risque est `units_in_stock < velocite_journaliere × 30`.
+Une CTE est nécessaire car le calcul de vélocité (agrégation) doit être réalisé avant d'être comparé
+au stock dans la requête principale.
 
-**Note méthodologique :** Le filtre de période utilise `order_date` (date de commande) plutôt que `shipped_date` (date d'expédition) pour mesurer la demande réelle. La date de référence est fixée à `1998-05-06` (date maximale du dataset Northwind) pour éviter toute circularité dans le calcul. La fonction `NULLIF` protège contre une division par zéro si la vélocité est nulle.
+**Note méthodologique :** Le filtre utilise `order_date` pour mesurer la demande réelle. La date de
+référence est fixée à `1998-05-06` (date maximale du dataset) pour éviter toute circularité. La
+fonction `NULLIF` protège contre une division par zéro si la vélocité est nulle.
+
+**Insight :** 45 produits sont en risque de rupture. Les plus critiques affichent un stock à 0 unité
+malgré une vélocité positive — Chef Anton's Gumbo Mix (1,33 unités/jour), Alice Mutton (1,88/jour),
+Thüringer Rostbratwurst (3,33/jour). Ces produits génèrent de la demande sans pouvoir être livrés :
+perte de CA directe et risque de désatisfaction client.
 
 ```sql
 -- ======================================
@@ -171,8 +239,8 @@ WITH ventes_recentes AS (
         p.product_name,
         SUM(od.quantity) / 90.0 AS velocity_by_product
     FROM order_details od
-    INNER JOIN products p ON p.product_id  = od.product_id
-    INNER JOIN orders   o ON o.order_id    = od.order_id
+    INNER JOIN products p ON p.product_id = od.product_id
+    INNER JOIN orders   o ON o.order_id   = od.order_id
     WHERE o.order_date >= '1998-05-06'::date - INTERVAL '90 days'
     GROUP BY p.product_id, p.product_name
 )
@@ -181,7 +249,7 @@ WITH ventes_recentes AS (
 SELECT
     p.product_name,
     p.units_in_stock,
-    ROUND(vr.velocity_by_product::numeric, 2)              AS velocite_journaliere,
+    ROUND(vr.velocity_by_product::numeric, 2)                    AS velocite_journaliere,
     ROUND(p.units_in_stock / NULLIF(vr.velocity_by_product, 0)) AS jours_restants
 FROM products p
 LEFT JOIN ventes_recentes vr ON p.product_id = vr.product_id
@@ -193,9 +261,17 @@ ORDER BY jours_restants ASC;
 
 ### Requête 6/10 — Performance des Commerciaux
 
-**Question business :** Quel commercial génère le plus de chiffre d'affaires net ? Comment se distribuent les commandes et la valeur moyenne par commande entre les membres de l'équipe de vente ?
+**Question business :** Quel commercial génère le plus de chiffre d'affaires net ? Comment se
+distribuent volume, valeur et panier moyen entre les membres de l'équipe de vente ?
 
-**Pourquoi cette analyse ?** Un classement par nombre de commandes seul peut être trompeur : un commercial qui gère peu de commandes à très haute valeur est souvent plus stratégique qu'un autre qui traite un grand volume de petites commandes. On croise donc trois métriques — volume, CA net, panier moyen — pour avoir un portrait complet de chaque commercial.
+**Pourquoi cette analyse ?** Un classement par nombre de commandes seul peut être trompeur : un
+commercial qui gère peu de commandes à très haute valeur est souvent plus stratégique qu'un autre
+qui traite un grand volume de petites commandes. On croise trois métriques — volume, CA net, panier
+moyen — pour avoir un portrait complet de chaque commercial.
+
+**Insight :** Margaret Peacock domine avec 232 891 $ sur 156 commandes. Mais Andrew Fuller, avec
+seulement 96 commandes, affiche le panier moyen le plus élevé (1 735 $) après Anne Dodsworth
+(1 798 $) — des profils orientés grands comptes à valoriser différemment des commerciaux volume.
 
 ```sql
 -- ======================================
@@ -207,12 +283,12 @@ ORDER BY jours_restants ASC;
 SELECT
     e.first_name,
     e.last_name,
-    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
-    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net_par_employe,
+    COUNT(DISTINCT o.order_id)                                          AS nb_commandes,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))      AS ca_net_par_employe,
     ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount))
-        / COUNT(DISTINCT o.order_id))                                       AS panier_moyen
+        / COUNT(DISTINCT o.order_id))                                   AS panier_moyen
 FROM employees e
-INNER JOIN orders       o  ON o.employee_id  = e.employee_id
+INNER JOIN orders        o  ON o.employee_id = e.employee_id
 INNER JOIN order_details od ON od.order_id   = o.order_id
 GROUP BY e.first_name, e.last_name
 ORDER BY ca_net_par_employe DESC;
@@ -222,9 +298,17 @@ ORDER BY ca_net_par_employe DESC;
 
 ### Requête 7/10 — Fidélité et Rétention des Clients
 
-**Question business :** Quels clients commandent régulièrement et lesquels ont commandé une seule fois avant de disparaître ? Quelle est la distribution de la fidélité dans notre base client ?
+**Question business :** Quels clients commandent régulièrement et lesquels ont commandé une seule
+fois avant de disparaître ? Quelle est la distribution de la fidélité dans notre base client ?
 
-**Pourquoi cette analyse ?** La fidélisation d'un client existant coûte en moyenne 5 à 7 fois moins cher que l'acquisition d'un nouveau client. Identifier les clients "one-shot" permet de déclencher des actions de réactivation ciblées. On utilise un LEFT JOIN pour conserver tous les clients, y compris ceux sans aucune commande. Le tri croissant met en évidence les clients les moins actifs en premier.
+**Pourquoi cette analyse ?** La fidélisation d'un client existant coûte en moyenne 5 à 7 fois moins
+cher que l'acquisition d'un nouveau client. Identifier les clients inactifs permet de déclencher des
+actions de réactivation ciblées. On utilise un LEFT JOIN pour conserver tous les clients, y compris
+ceux sans aucune commande.
+
+**Insight :** 2 clients — Paris Spécialités et FISSA Fabrica — affichent 0 commande : présents dans
+le CRM, jamais convertis. 1 client (Centro Comercial Moctezuma) n'a commandé qu'une seule fois.
+Ces 3 profils méritent une action commerciale prioritaire avant de les désactiver définitivement.
 
 ```sql
 -- ======================================
@@ -248,9 +332,18 @@ ORDER BY nb_commandes ASC;
 
 ### Requête 8/10 — Impact des Remises sur la Marge
 
-**Question business :** Les remises accordées stimulent-elles réellement le volume de ventes, ou détruisent-elles de la marge sans contrepartie suffisante ?
+**Question business :** Les remises accordées stimulent-elles réellement le volume de ventes, ou
+détruisent-elles de la marge sans contrepartie suffisante ?
 
-**Pourquoi cette analyse ?** On compare pour chaque catégorie le CA brut (sans remise) et le CA net (avec remise) afin de quantifier le montant et le pourcentage de marge sacrifié. Si une catégorie affiche un fort pourcentage de remise mais pas un volume de commandes anormalement élevé, la politique tarifaire mérite d'être révisée. Cette analyse est le premier niveau d'un audit pricing : elle soulève les bonnes questions sans y répondre définitivement (les données de coût d'achat seraient nécessaires pour aller plus loin).
+**Pourquoi cette analyse ?** On compare pour chaque catégorie le CA brut et le CA net afin de
+quantifier le montant et le pourcentage de marge sacrifié. Si une catégorie affiche un fort taux de
+remise sans volume de commandes anormalement élevé en contrepartie, la politique tarifaire mérite
+d'être révisée.
+
+**Insight :** Meat/Poultry cumule le paradoxe le plus fort : taux de remise le plus élevé (9%) sur
+la catégorie au panier moyen le plus premium. 15 166 $ de marge sacrifiée sans que cela se traduise
+par un volume exceptionnel (161 commandes seulement). La politique de remise sur cette catégorie
+doit être auditée en priorité.
 
 ```sql
 -- ======================================
@@ -261,17 +354,17 @@ ORDER BY nb_commandes ASC;
 
 SELECT
     c.category_name,
-    ROUND(SUM(od.quantity * od.unit_price))                                AS ca_brut,
-    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net,
+    ROUND(SUM(od.quantity * od.unit_price))                            AS ca_brut,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))     AS ca_net,
     ROUND(SUM(od.quantity * od.unit_price)
-        - SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS montant_remise,
+        - SUM((od.quantity * od.unit_price) * (1 - od.discount)))     AS montant_remise,
     ROUND(
         (SUM(od.quantity * od.unit_price)
             - SUM((od.quantity * od.unit_price) * (1 - od.discount)))
         / SUM(od.quantity * od.unit_price) * 100
-    , 2)                                                                    AS pct_remise
+    , 2)                                                               AS pct_remise
 FROM categories c
-INNER JOIN products    p  ON p.category_id  = c.category_id
+INNER JOIN products      p  ON p.category_id = c.category_id
 INNER JOIN order_details od ON od.product_id = p.product_id
 GROUP BY c.category_name
 ORDER BY pct_remise DESC;
@@ -281,9 +374,18 @@ ORDER BY pct_remise DESC;
 
 ### Requête 9/10 — Saisonnalité des Ventes
 
-**Question business :** Quels mois génèrent le plus de chiffre d'affaires net ? Y a-t-il un pattern saisonnier récurrent que l'on peut exploiter pour planifier les stocks et les campagnes commerciales ?
+**Question business :** Quels mois génèrent le plus de chiffre d'affaires net ? Y a-t-il un pattern
+saisonnier récurrent exploitable pour planifier les stocks et les campagnes commerciales ?
 
-**Pourquoi cette analyse ?** Comprendre la saisonnalité permet d'anticiper les pics de demande, d'optimiser les niveaux de stock et de concentrer les efforts marketing sur les périodes à fort potentiel. On extrait l'année et le mois séparément pour éviter la fusion de périodes identiques sur des années différentes (janvier 1997 et janvier 1998 restent distincts). On croise CA net et nombre de commandes pour distinguer les mois à forte valeur des mois à fort volume.
+**Pourquoi cette analyse ?** Comprendre la saisonnalité permet d'anticiper les pics de demande,
+d'optimiser les niveaux de stock et de concentrer les efforts marketing sur les périodes à fort
+potentiel. On extrait l'année et le mois séparément pour éviter la fusion de périodes identiques sur
+des années différentes.
+
+**Insight :** Avril 1998 est le meilleur mois avec 123 799 $ de CA net sur 74 commandes. Le début
+d'année 1998 (janvier à avril) affiche une croissance continue exceptionnelle. En 1997, le pattern
+est plus stable avec des pics en juillet (51 021 $) et octobre (66 749 $) — un cycle saisonnier
+T3/T4 classique en distribution alimentaire.
 
 ```sql
 -- ======================================
@@ -294,10 +396,10 @@ ORDER BY pct_remise DESC;
 -- ======================================
 
 SELECT
-    EXTRACT(YEAR  FROM o.order_date)                                        AS annee,
-    EXTRACT(MONTH FROM o.order_date)                                        AS mois,
-    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
-    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net_par_mois
+    EXTRACT(YEAR  FROM o.order_date) AS annee,
+    EXTRACT(MONTH FROM o.order_date) AS mois,
+    COUNT(DISTINCT o.order_id)       AS nb_commandes,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount))) AS ca_net_par_mois
 FROM orders o
 INNER JOIN order_details od ON od.order_id = o.order_id
 GROUP BY annee, mois
@@ -308,9 +410,20 @@ ORDER BY annee DESC, mois DESC;
 
 ### Requête 10/10 — Top Produit par Catégorie (Window Function)
 
-**Question business :** Quel est le produit champion de chaque catégorie en termes de chiffre d'affaires net ? Cette information guide les décisions de mise en avant commerciale et de gestion des stocks prioritaires.
+**Question business :** Quel est le produit champion de chaque catégorie en termes de chiffre
+d'affaires net ? Cette information guide les décisions de mise en avant commerciale et de gestion
+des stocks prioritaires.
 
-**Pourquoi cette analyse ?** On ne peut pas filtrer directement sur un rang calculé par une window function : SQL évalue les window functions **après** le WHERE, donc le rang n'existe pas encore au moment du filtrage. La solution est une double CTE : la première agrège les ventes par produit et catégorie, la seconde applique `ROW_NUMBER()` avec `PARTITION BY category_id` pour attribuer un rang au sein de chaque catégorie. On filtre ensuite sur `rang = 1` pour ne conserver que le champion de chaque catégorie.
+**Pourquoi cette analyse ?** On ne peut pas filtrer directement sur un rang calculé par une window
+function : SQL évalue les window functions **après** le WHERE, donc le rang n'existe pas encore au
+moment du filtrage. La solution est une double CTE : la première agrège les ventes par produit et
+catégorie, la seconde applique `ROW_NUMBER()` avec `PARTITION BY category_id` pour attribuer un rang
+au sein de chaque catégorie. On filtre ensuite sur `rang = 1`.
+
+**Insight :** Côte de Blaye domine Beverages avec 141 397 $ de CA net — un produit unique qui
+représente à lui seul plus de 50% du CA de sa catégorie. Raclette Courdavault mène Dairy Products
+avec 71 156 $. Ces produits champions sont des actifs stratégiques : une rupture de stock sur l'un
+d'eux impacte directement le CA de toute la catégorie.
 
 ```sql
 -- ======================================
@@ -326,12 +439,12 @@ WITH ca_par_produit AS (
         c.category_id,
         p.product_id,
         p.product_name,
-        COUNT(DISTINCT od.order_id)                                        AS nb_commandes,
-        SUM(od.quantity)                                                   AS quantite_totale,
-        ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))     AS ca_net_par_produit
+        COUNT(DISTINCT od.order_id)                                    AS nb_commandes,
+        SUM(od.quantity)                                               AS quantite_totale,
+        ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount))) AS ca_net_par_produit
     FROM categories c
-    INNER JOIN products      p  ON p.category_id  = c.category_id
-    INNER JOIN order_details od ON od.product_id  = p.product_id
+    INNER JOIN products      p  ON p.category_id = c.category_id
+    INNER JOIN order_details od ON od.product_id = p.product_id
     GROUP BY c.category_id, p.product_id, p.product_name
 ),
 
