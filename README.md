@@ -1,164 +1,358 @@
-#  Northwind Traders — Audit de la Performance Commerciale & Optimisation Supply Chain
+# Northwind Traders — Audit de la Performance Commerciale & Optimisation Supply Chain
 
-##  Contexte Business
+## Contexte Business
+
 Northwind Traders est une entreprise internationale de distribution et d'import-export de produits alimentaires. Face à une concurrence accrue et à des marges de plus en plus serrées, la direction générale exige un audit complet de ses opérations globales.
 
 L'objectif de ce projet est de transformer les données brutes (transactions, stocks, clients, employés) en leviers stratégiques actionnables pour :
-  - **Optimiser la Supply Chain** (délais de livraison, gestion des ruptures de stock).
-  - **Maximiser la Profitabilité** (analyse des remises, top produits, segmentation clients).
-  - **Piloter la Performance** (KPIs de vente par employé et par région).
 
-###  Stack Technique
-- **Base de données :** PostgreSQL (Modélisation relationnelle, requêtes complexes, CTEs, Window Functions)
+- **Optimiser la Supply Chain** : délais de livraison, gestion des ruptures de stock.
+- **Maximiser la Profitabilité** : analyse des remises, top produits, segmentation clients.
+- **Piloter la Performance** : KPIs de vente par employé et par région.
+
+## Stack Technique
+
+- **Base de données :** PostgreSQL (modélisation relationnelle, requêtes complexes, CTEs, Window Functions)
 - **Environnement :** Local / pgAdmin
 
-### Requete SQL 
-- **Requête 1/10 — Le calcul du Chiffre d'Affaires net (avec remises)**
-  Le but ici est d'analyser la santé financière de l'entreprise. Nous voulons connaitre son chiffre et pour etre plus précis, nous voulons son chiffre net deduit des remises.
-  La formula mathematique suivante peut etre retenu : (prix_unitaire * quantite_vendue)(1-remise)
-  Cela nous donnera :
-    SELECT SUM((unit_price * quantity)*(1-discount)) AS ca_net
-    FROM order_details
-  (Claude)
-  -- ======================================
-  -- REQUÊTE 1 : CA net par catégorie
-  -- Business context : identifier les catégories
-  -- qui génèrent le plus de valeur réelle
-  -- (après remises) vs volume brut
-  -- ======================================
-  
-  SELECT
-      c.category_name,
-      COUNT(DISTINCT od.order_id) AS nb_commandes,
-      SUM(od.quantity)            AS quantite_totale,
-      SUM((od.quantity * od.unit_price) * (1 - od.discount)) AS ca_net_par_categorie
-  FROM categories c
-  INNER JOIN products p  ON p.category_id = c.category_id
-  INNER JOIN order_details od ON od.product_id = p.product_id
-  GROUP BY c.category_name
-  ORDER BY ca_net_par_categorie DESC;
+---
 
-  Meat/Poultry a un panier moyen élevé avec peu de volume — ça signifie des produits premium, achetés moins souvent mais à haute valeur unitaire. En business, ça change complètement la stratégie commerciale vs une catégorie haute fréquence / faible valeur.(a rajouter correctement)
-- **Requête 2/10 — Le Top 10 des clients par Chiffre d'Affaires Net**
-  Toujours dans l'optique d'analyser la santé financière de l'entreprise, nous voulons connaitre cette fois si le top 10 de ces meilleurs clients. Il vaut mieux concentrer nos efforts sur la satisfaction de ceux qui font le plus de notre CA.
-  Claude me pousse beaucoup plus loin en allant me denmander comment on identie vraiment une campagnie de maniere unique, aller chercher ds metris pertinente plutot que de se limiter a celle qu'on a la.
-    SELECT  c.company_name, SUM((od.quantity * od.unit_price)*(1-od.discount)) as ca_net_par_company 
-    FROM customers c 
-    INNER JOIN orders o
-    ON c.customer_id = o.customer_id
-    INNER JOIN order_details od
-    ON od.order_id = o.order_id
-    GROUP BY c.company_name
-    ORDER BY ca_net_par_company DESC
-    LIMIT 10
-  --Variante 2 CA par categorie de produit
-    SELECT  c.category_name, SUM((od.quantity * od.unit_price)*(1-od.discount)) as ca_net_par_category 
-    FROM categories c 
-    INNER JOIN products p
-    ON p.category_id = c.category_id
-    INNER JOIN order_details od
-    ON od.product_id = p.product_id
-    GROUP BY c.category_name
-    ORDER BY ca_net_par_category DESC
-    ou encoe
-    SELECT  
-    	cu.customer_id,
-    	cu.company_name,
-    	COUNT(o.order_id) as nb_commandes,
-    	SUM((od.quantity * od.unit_price)*(1-od.discount)) as ca_net_par_company, 
-    	SUM((od.quantity * od.unit_price) * (1 - od.discount)) 
-    	/ COUNT(DISTINCT o.order_id) AS panier_moyen
-    FROM customers cu 
-    INNER JOIN orders o
-    ON cu.customer_id = o.customer_id
-    INNER JOIN order_details od
-    ON od.order_id = o.order_id
-    GROUP BY cu.customer_id, cu.company_name
-    ORDER BY ca_net_par_company DESC
-    LIMIT 10
-- **Requête 3/10 : L'analyse des produits fantômes.**
-  Le Responsable Logistique a une intuition : il pense que le catalogue est surchargé de produits qui coûtent cher en stockage mais que personne n'achète. Il veut la liste des produits qui n'ont jamais été commandés.
-    SELECT 
-    	p.product_name, 
-    	p.unit_price, 
-    	p.units_in_stock, 
-    	p.discontinued
-    FROM products p
-    LEFT JOIN order_details od
-    ON p.product_id = od.product_id
-    WHERE od.product_id IS NULL
-  ps : Tout les produit ont ete vendus, donc l'intuition de notre responsable logistic etait donc fausse. Imaginons que la table products contienne des produits archivés ou discontinus (des produits qu'on ne vend plus). S'ils ont été vendus il y a 3 ans, ils   apparaissent dans ta jointure, donc pas de NULL. Pourtant, ils encombrent peut-être encore l'entrepôt aujourd'hui.
-- **Requête 4/10 : L'analyse des délais de livraison.**
-  Le Directeur des Opérations veut auditer la Supply Chain. Il veut connaître le délai moyen en jours entre la date de commande et la date de livraison moyen, par compagnie mais aussi par pays de livraison. Cela nous permet d'apprecier les livreurs les plus rapides.
-Enfaite, il peut arriver qu'une entrepise soir plus rapide sur un pays qu'un autre meme si son concurrent est globalement plus rapide, ca nous sert aaffiner nos choix. Donc la plus pertinente pour la question businnes est la 1ere, mais la seconde est utile aussi.
-  --Par trasnporteur global
-  SELECT
-  	sh.company_name,
-  	COUNT(DISTINCT o.order_id) AS nb_commandes,
-  	ROUND(AVG( shipped_date::date - order_date::date)) as delai_moyen_livraison
-  FROM orders o
-  INNER JOIN shippers sh
-  ON sh.shipper_id = o.ship_via
-  WHERE o.shipped_date IS NOT NULL
-  GROUP BY sh.company_name
-  ORDER BY delai_moyen_livraison DESC 
-  
-  --Par pays
-  SELECT
-  	o.ship_country,
-  	sh.company_name,
-  	ROUND(AVG( shipped_date::date - order_date::date)) as delai_moyen_livraison
-  FROM orders o
-  INNER JOIN shippers sh
-  ON sh.shipper_id = o.ship_via
-  WHERE o.shipped_date IS NOT NULL
-  GROUP BY sh.company_name, o.ship_country
-  ORDER BY delai_moyen_livraison DESC 
-- **Requête 5/10 — Taux de réapprovisionnement critique.**
-Question business : Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle continue ?**
-Le stock actuel : Tu l'as dans la table products (colonne units_in_stock).
-La vitesse de vente (Vélocité) : C'est le nombre d'unités vendues par jour. Si tu constates que tu as vendu 300 unités d'un produit sur les 30 derniers jours, cela signifie que ta vélocité est de $300 / 30 = 10 unités/jour.
-La projection : Si tu vends 10 unités par jour et qu'il te reste 50 unités en stock, tu as du stock pour $50 / 10 = 5 \text{ jours}$. Tu seras donc en rupture bien avant les 30 prochains jours.
-- **Requête 5/10 :  — Taux de réapprovisionnement critique..**
-  Question business : "Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle continue ?"
-Le stock actuel : Tu l'as dans la table products (colonne units_in_stock).
-La vitesse de vente (Vélocité) : 
-C'est le nombre d'unités vendues par jour. Si tu constates que tu as vendu 300 unités d'un 
-produit sur les 30 derniers jours, cela signifie que ta vélocité est de $300 / 30 = 10 unités/jour$.
-La projection : Si tu vends 10 unités par jour et qu'il te reste 50 unités en stock, tu as du stock pour $50 / 10 = 5\jours$. 
-Tu seras donc en rupture bien avant les 30 prochains jours.'
+## Analyse de la Rentabilité et de la Gestion des Stocks
 
-  -- CTE 1 : calculer les unités vendues 
-  --         par produit sur les 90 derniers jours
-  
-  WITH ventes_recentes AS (
-     SELECT
-     	  p.product_id,
-  	  p.product_name,
-  	  (SUM(od.quantity)   /
-  	  90) as velocity_by_product
-    FROM order_details od 
-    INNER JOIN products p  
-    ON p.product_id = od.product_id
-    INNER JOIN orders o
-    ON o.order_id = od.order_id
+### Requête 1/10 — Chiffre d'Affaires Net Global & par Catégorie
+
+**Question business :** Quelle est la santé financière réelle de l'entreprise, et quelles catégories de produits génèrent le plus de valeur après déduction des remises accordées aux clients ?
+
+**Pourquoi cette analyse ?** Présenter un CA brut à la direction, c'est mentir par omission. Les remises réduisent directement la valeur encaissée. La formule retenue est `(prix_unitaire × quantité) × (1 - remise)`, qui donne le montant réellement perçu par transaction. On compare ensuite le volume de commandes à la valeur générée pour distinguer les catégories à fort volume de celles à forte valeur unitaire.
+
+**Insight clé :** La catégorie Meat/Poultry affiche un panier moyen élevé avec peu de commandes — signe de produits premium achetés en faible fréquence mais à haute valeur. Cela implique une stratégie commerciale différente d'une catégorie haute fréquence / faible valeur comme Beverages.
+
+```sql
+-- ======================================
+-- REQUÊTE 1 : CA net par catégorie
+-- Business context : identifier les catégories
+-- qui génèrent le plus de valeur réelle
+-- (après remises) vs volume brut
+-- ======================================
+
+SELECT
+    c.category_name,
+    COUNT(DISTINCT od.order_id) AS nb_commandes,
+    SUM(od.quantity)            AS quantite_totale,
+    SUM((od.quantity * od.unit_price) * (1 - od.discount)) AS ca_net_par_categorie
+FROM categories c
+INNER JOIN products p  ON p.category_id = c.category_id
+INNER JOIN order_details od ON od.product_id = p.product_id
+GROUP BY c.category_name
+ORDER BY ca_net_par_categorie DESC;
+```
+
+---
+
+### Requête 2/10 — Top 10 des Clients par Chiffre d'Affaires Net
+
+**Question business :** Quels sont nos 10 clients les plus précieux, et comment se distinguent-ils en termes de fréquence d'achat et de valeur moyenne par commande ?
+
+**Pourquoi cette analyse ?** Un CA élevé peut masquer des réalités très différentes : un client peut générer beaucoup de revenus parce qu'il commande souvent (fidélité), ou parce qu'il passe de très grosses commandes ponctuelles (valeur unitaire élevée). Ces deux profils nécessitent des stratégies de fidélisation distinctes. Le client est identifié par son `customer_id` unique pour éviter toute ambiguïté sur les noms d'entreprises.
+
+```sql
+-- ======================================
+-- REQUÊTE 2 : Top 10 clients par CA net
+-- Business context : identifier les clients
+-- à fort enjeu commercial et comprendre
+-- leur profil d'achat (fréquence vs valeur)
+-- ======================================
+
+SELECT
+    cu.customer_id,
+    cu.company_name,
+    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
+    SUM((od.quantity * od.unit_price) * (1 - od.discount))                 AS ca_net_par_client,
+    SUM((od.quantity * od.unit_price) * (1 - od.discount))
+        / COUNT(DISTINCT o.order_id)                                        AS panier_moyen
+FROM customers cu
+INNER JOIN orders o       ON o.customer_id  = cu.customer_id
+INNER JOIN order_details od ON od.order_id  = o.order_id
+GROUP BY cu.customer_id, cu.company_name
+ORDER BY ca_net_par_client DESC
+LIMIT 10;
+```
+
+---
+
+### Requête 3/10 — Analyse des Produits Fantômes
+
+**Question business :** Quels produits sont référencés au catalogue mais n'ont jamais généré une seule commande, représentant ainsi un coût de stockage sans retour sur investissement ?
+
+**Pourquoi cette analyse ?** Le Responsable Logistique suspectait une surcharge du catalogue. On utilise un **anti-join** (LEFT JOIN + WHERE IS NULL) : on joint tous les produits avec les lignes de commandes, et on filtre ceux pour lesquels aucune correspondance n'existe dans `order_details`. On affiche également le statut `discontinued` pour distinguer les produits à archiver définitivement de ceux encore actifs mais jamais achetés — deux situations qui appellent deux décisions différentes.
+
+**Résultat :** Tous les produits ont été commandés au moins une fois. L'intuition du Responsable Logistique était infondée sur ce dataset. À noter : des produits `discontinued` vendus par le passé n'apparaissent pas ici car ils ont bien des lignes dans `order_details`. Une analyse complémentaire sur le stock résiduel de ces produits discontinués serait pertinente.
+
+```sql
+-- ======================================
+-- REQUÊTE 3 : Produits jamais commandés
+-- Business context : identifier le stock mort
+-- et les produits à retirer du catalogue
+-- ======================================
+
+SELECT
+    p.product_name,
+    p.unit_price,
+    p.units_in_stock,
+    p.discontinued
+FROM products p
+LEFT JOIN order_details od ON p.product_id = od.product_id
+WHERE od.product_id IS NULL;
+```
+
+---
+
+### Requête 4/10 — Analyse des Délais de Livraison
+
+**Question business :** Quel transporteur offre les délais de livraison les plus fiables ? Existe-t-il des disparités par pays qui justifieraient d'adapter notre choix de transporteur selon la destination ?
+
+**Pourquoi cette analyse ?** Le délai de livraison est un levier direct de satisfaction client. On mesure l'écart en jours entre `order_date` et `shipped_date`. Les commandes non encore livrées (`shipped_date IS NULL`) sont exclues pour ne pas fausser la moyenne. Deux granularités sont analysées : la performance globale par transporteur (vision stratégique) et la performance par pays (vision opérationnelle). Un transporteur peut être globalement plus rapide mais moins performant sur certaines destinations spécifiques.
+
+```sql
+-- ======================================
+-- REQUÊTE 4A : Délais moyens par transporteur (global)
+-- Business context : évaluer la fiabilité
+-- globale de chaque partenaire logistique
+-- ======================================
+
+SELECT
+    sh.company_name,
+    COUNT(DISTINCT o.order_id)                              AS nb_commandes,
+    ROUND(AVG(o.shipped_date::date - o.order_date::date))  AS delai_moyen_livraison
+FROM orders o
+INNER JOIN shippers sh ON sh.shipper_id = o.ship_via
+WHERE o.shipped_date IS NOT NULL
+GROUP BY sh.company_name
+ORDER BY delai_moyen_livraison DESC;
+
+-- ======================================
+-- REQUÊTE 4B : Délais moyens par pays
+-- Business context : affiner le choix du
+-- transporteur selon la destination
+-- ======================================
+
+SELECT
+    o.ship_country,
+    sh.company_name,
+    ROUND(AVG(o.shipped_date::date - o.order_date::date))  AS delai_moyen_livraison
+FROM orders o
+INNER JOIN shippers sh ON sh.shipper_id = o.ship_via
+WHERE o.shipped_date IS NOT NULL
+GROUP BY sh.company_name, o.ship_country
+ORDER BY delai_moyen_livraison DESC;
+```
+
+---
+
+### Requête 5/10 — Taux de Réapprovisionnement Critique
+
+**Question business :** Quels produits risquent une rupture de stock dans les 30 prochains jours si la vélocité de vente actuelle se maintient ?
+
+**Pourquoi cette analyse ?** On calcule une **vélocité de vente** : le nombre d'unités vendues par jour sur les 90 derniers jours. On compare ensuite ce rythme au stock disponible pour projeter dans combien de jours le stock sera épuisé. La condition de risque est `units_in_stock < velocite_journaliere × 30`. Une CTE est nécessaire car le calcul de vélocité (agrégation) doit être réalisé avant d'être comparé au stock dans la requête principale.
+
+**Note méthodologique :** Le filtre de période utilise `order_date` (date de commande) plutôt que `shipped_date` (date d'expédition) pour mesurer la demande réelle. La date de référence est fixée à `1998-05-06` (date maximale du dataset Northwind) pour éviter toute circularité dans le calcul. La fonction `NULLIF` protège contre une division par zéro si la vélocité est nulle.
+
+```sql
+-- ======================================
+-- REQUÊTE 5 : Risque de rupture de stock
+-- Business context : anticiper les ruptures
+-- et déclencher le réapprovisionnement
+-- ======================================
+
+-- CTE : vélocité de vente par produit sur 90 jours
+WITH ventes_recentes AS (
+    SELECT
+        p.product_id,
+        p.product_name,
+        SUM(od.quantity) / 90.0 AS velocity_by_product
+    FROM order_details od
+    INNER JOIN products p ON p.product_id  = od.product_id
+    INNER JOIN orders   o ON o.order_id    = od.order_id
     WHERE o.order_date >= '1998-05-06'::date - INTERVAL '90 days'
     GROUP BY p.product_id, p.product_name
-  )
-  --Nous pourrions aussi bien utiliser o.shipped_date car la la commande quitte effectivement le stcok, il faut documenter le choix.
-  
-  -- Requête principale : joindre avec products
-  -- et appliquer la condition de risque
-  
-  SELECT 
-  	p.product_name, 
-  	p.units_in_stock,
-  	vr.velocity_by_product,
-  	ROUND(p.units_in_stock / NULLIF(vr.velocity_by_product, 0)) AS jours_restants
-  FROM products p
-  LEFT JOIN ventes_recentes vr 
-  ON p.product_id = vr.product_id
-  WHERE p.units_in_stock < vr.velocity_by_product * 30
+)
 
-  
-  
+-- Requête principale : comparaison stock vs projection 30 jours
+SELECT
+    p.product_name,
+    p.units_in_stock,
+    ROUND(vr.velocity_by_product::numeric, 2)              AS velocite_journaliere,
+    ROUND(p.units_in_stock / NULLIF(vr.velocity_by_product, 0)) AS jours_restants
+FROM products p
+LEFT JOIN ventes_recentes vr ON p.product_id = vr.product_id
+WHERE p.units_in_stock < vr.velocity_by_product * 30
+ORDER BY jours_restants ASC;
+```
+
+---
+
+### Requête 6/10 — Performance des Commerciaux
+
+**Question business :** Quel commercial génère le plus de chiffre d'affaires net ? Comment se distribuent les commandes et la valeur moyenne par commande entre les membres de l'équipe de vente ?
+
+**Pourquoi cette analyse ?** Un classement par nombre de commandes seul peut être trompeur : un commercial qui gère peu de commandes à très haute valeur est souvent plus stratégique qu'un autre qui traite un grand volume de petites commandes. On croise donc trois métriques — volume, CA net, panier moyen — pour avoir un portrait complet de chaque commercial.
+
+```sql
+-- ======================================
+-- REQUÊTE 6 : Performance des commerciaux
+-- Business context : identifier les top
+-- performers et les profils de vente
+-- ======================================
+
+SELECT
+    e.first_name,
+    e.last_name,
+    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net_par_employe,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount))
+        / COUNT(DISTINCT o.order_id))                                       AS panier_moyen
+FROM employees e
+INNER JOIN orders       o  ON o.employee_id  = e.employee_id
+INNER JOIN order_details od ON od.order_id   = o.order_id
+GROUP BY e.first_name, e.last_name
+ORDER BY ca_net_par_employe DESC;
+```
+
+---
+
+### Requête 7/10 — Fidélité et Rétention des Clients
+
+**Question business :** Quels clients commandent régulièrement et lesquels ont commandé une seule fois avant de disparaître ? Quelle est la distribution de la fidélité dans notre base client ?
+
+**Pourquoi cette analyse ?** La fidélisation d'un client existant coûte en moyenne 5 à 7 fois moins cher que l'acquisition d'un nouveau client. Identifier les clients "one-shot" permet de déclencher des actions de réactivation ciblées. On utilise un LEFT JOIN pour conserver tous les clients, y compris ceux sans aucune commande. Le tri croissant met en évidence les clients les moins actifs en premier.
+
+```sql
+-- ======================================
+-- REQUÊTE 7 : Fidélité clients
+-- Business context : segmenter les clients
+-- par fréquence pour cibler les actions
+-- de rétention et de réactivation
+-- ======================================
+
+SELECT
+    cu.customer_id,
+    cu.company_name,
+    COUNT(DISTINCT o.order_id) AS nb_commandes
+FROM customers cu
+LEFT JOIN orders o ON o.customer_id = cu.customer_id
+GROUP BY cu.customer_id, cu.company_name
+ORDER BY nb_commandes ASC;
+```
+
+---
+
+### Requête 8/10 — Impact des Remises sur la Marge
+
+**Question business :** Les remises accordées stimulent-elles réellement le volume de ventes, ou détruisent-elles de la marge sans contrepartie suffisante ?
+
+**Pourquoi cette analyse ?** On compare pour chaque catégorie le CA brut (sans remise) et le CA net (avec remise) afin de quantifier le montant et le pourcentage de marge sacrifié. Si une catégorie affiche un fort pourcentage de remise mais pas un volume de commandes anormalement élevé, la politique tarifaire mérite d'être révisée. Cette analyse est le premier niveau d'un audit pricing : elle soulève les bonnes questions sans y répondre définitivement (les données de coût d'achat seraient nécessaires pour aller plus loin).
+
+```sql
+-- ======================================
+-- REQUÊTE 8 : Impact des remises sur la marge
+-- Business context : évaluer si la politique
+-- de remises est justifiée par le volume généré
+-- ======================================
+
+SELECT
+    c.category_name,
+    ROUND(SUM(od.quantity * od.unit_price))                                AS ca_brut,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net,
+    ROUND(SUM(od.quantity * od.unit_price)
+        - SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS montant_remise,
+    ROUND(
+        (SUM(od.quantity * od.unit_price)
+            - SUM((od.quantity * od.unit_price) * (1 - od.discount)))
+        / SUM(od.quantity * od.unit_price) * 100
+    , 2)                                                                    AS pct_remise
+FROM categories c
+INNER JOIN products    p  ON p.category_id  = c.category_id
+INNER JOIN order_details od ON od.product_id = p.product_id
+GROUP BY c.category_name
+ORDER BY pct_remise DESC;
+```
+
+---
+
+### Requête 9/10 — Saisonnalité des Ventes
+
+**Question business :** Quels mois génèrent le plus de chiffre d'affaires net ? Y a-t-il un pattern saisonnier récurrent que l'on peut exploiter pour planifier les stocks et les campagnes commerciales ?
+
+**Pourquoi cette analyse ?** Comprendre la saisonnalité permet d'anticiper les pics de demande, d'optimiser les niveaux de stock et de concentrer les efforts marketing sur les périodes à fort potentiel. On extrait l'année et le mois séparément pour éviter la fusion de périodes identiques sur des années différentes (janvier 1997 et janvier 1998 restent distincts). On croise CA net et nombre de commandes pour distinguer les mois à forte valeur des mois à fort volume.
+
+```sql
+-- ======================================
+-- REQUÊTE 9 : Saisonnalité des ventes
+-- Business context : identifier les pics
+-- d'activité pour optimiser stocks et
+-- planification commerciale
+-- ======================================
+
+SELECT
+    EXTRACT(YEAR  FROM o.order_date)                                        AS annee,
+    EXTRACT(MONTH FROM o.order_date)                                        AS mois,
+    COUNT(DISTINCT o.order_id)                                              AS nb_commandes,
+    ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))          AS ca_net_par_mois
+FROM orders o
+INNER JOIN order_details od ON od.order_id = o.order_id
+GROUP BY annee, mois
+ORDER BY annee DESC, mois DESC;
+```
+
+---
+
+### Requête 10/10 — Top Produit par Catégorie (Window Function)
+
+**Question business :** Quel est le produit champion de chaque catégorie en termes de chiffre d'affaires net ? Cette information guide les décisions de mise en avant commerciale et de gestion des stocks prioritaires.
+
+**Pourquoi cette analyse ?** On ne peut pas filtrer directement sur un rang calculé par une window function : SQL évalue les window functions **après** le WHERE, donc le rang n'existe pas encore au moment du filtrage. La solution est une double CTE : la première agrège les ventes par produit et catégorie, la seconde applique `ROW_NUMBER()` avec `PARTITION BY category_id` pour attribuer un rang au sein de chaque catégorie. On filtre ensuite sur `rang = 1` pour ne conserver que le champion de chaque catégorie.
+
+```sql
+-- ======================================
+-- REQUÊTE 10 : Top produit par catégorie
+-- Business context : identifier les produits
+-- champions pour prioriser stocks et
+-- actions commerciales par catégorie
+-- ======================================
+
+-- CTE 1 : agrégation CA net par produit et catégorie
+WITH ca_par_produit AS (
+    SELECT
+        c.category_id,
+        p.product_id,
+        p.product_name,
+        COUNT(DISTINCT od.order_id)                                        AS nb_commandes,
+        SUM(od.quantity)                                                   AS quantite_totale,
+        ROUND(SUM((od.quantity * od.unit_price) * (1 - od.discount)))     AS ca_net_par_produit
+    FROM categories c
+    INNER JOIN products      p  ON p.category_id  = c.category_id
+    INNER JOIN order_details od ON od.product_id  = p.product_id
+    GROUP BY c.category_id, p.product_id, p.product_name
+),
+
+-- CTE 2 : classement par catégorie avec window function
+rang_produits AS (
+    SELECT
+        c.category_name,
+        cpp.product_name,
+        cpp.ca_net_par_produit,
+        cpp.quantite_totale,
+        ROW_NUMBER() OVER (
+            PARTITION BY cpp.category_id
+            ORDER BY cpp.ca_net_par_produit DESC
+        ) AS rang
+    FROM ca_par_produit cpp
+    INNER JOIN categories c ON c.category_id = cpp.category_id
+)
+
+-- Sélection finale : uniquement le champion de chaque catégorie
+SELECT *
+FROM rang_produits
+WHERE rang = 1
+ORDER BY ca_net_par_produit DESC;
+```
